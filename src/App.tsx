@@ -4,9 +4,12 @@ import {
   MapContainer, TileLayer, LayersControl, GeoJSON,
 } from 'react-leaflet';
 import axios from 'axios';
-import { Button, Form, InputGroup } from 'react-bootstrap';
+import {
+  Button, Form, InputGroup, Spinner,
+} from 'react-bootstrap';
 import { GeoJsonObject } from 'geojson';
 import L from 'leaflet';
+import { useQuery } from 'react-query';
 import { isGeoJSON } from './utils/func';
 import { SwalError, SwalSubmit } from './components/swal';
 
@@ -23,11 +26,26 @@ function App() {
   const [validated, setValidated] = React.useState(false);
   const [currentGeoJSON, setCurrentGeoJSON] = React.useState<GeoJsonObject>();
 
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['get-list'],
+    queryFn: () => axios.get<{[x:string] : GeoJsonObject}>('/api', {
+      timeout: 5000,
+    }),
+    onError: (e: Error) => SwalError(e.message),
+  });
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (e.currentTarget.checkValidity() && sendData.geojson) {
+    const form = e.currentTarget;
+    if (form.checkValidity() && sendData.geojson) {
       SwalSubmit({
-        onSubmit: () => axios.post('/api', sendData),
+        onSubmit: () => axios.post('/api', sendData, {
+          timeout: 15000,
+        }),
+        onSuccess: () => {
+          form.reset();
+          refetch();
+        },
       });
     }
     setValidated(true);
@@ -54,38 +72,29 @@ function App() {
   // zoom and move map when change selected geoJSON
   React.useEffect(() => {
     if (!!mapRef.current && !!geoJSONRef.current && !!currentGeoJSON) {
-      const center = geoJSONRef.current.getBounds().getCenter();
+      const center = L.geoJSON(currentGeoJSON).getBounds().getCenter();
+      geoJSONRef.current?.clearLayers();
       mapRef.current?.flyTo(center, 6, { duration: 2, animate: true });
+      geoJSONRef.current?.addData(currentGeoJSON);
     }
   }, [mapRef, geoJSONRef, currentGeoJSON]);
 
-  const [geoJSONList, setGeoJSONList] = React.useState<{[x: string]: GeoJsonObject}>();
-  React.useEffect(() => {
-    axios.get<{[x:string] : GeoJsonObject}>('/api', {
-      timeout: 5000,
-    })
-      .then((res) => {
-        setGeoJSONList(res.data);
-      })
-      .catch((e) => SwalError(e.message));
-  }, []);
-
   const listMemo = React.useMemo(() => {
-    if (geoJSONList) {
-      return Object.keys(geoJSONList).map((x) => (
+    if (data?.data) {
+      return Object.keys(data.data).map((x) => (
         <Form.Check
           type="radio"
           id="radio"
           name="radio"
           key={x}
           label={x}
-          onChange={() => setCurrentGeoJSON(geoJSONList[x])}
-          checked={geoJSONList[x] === currentGeoJSON}
+          onChange={() => setCurrentGeoJSON(data.data[x])}
+          checked={data.data[x] === currentGeoJSON}
         />
       ));
     }
     return null;
-  }, [geoJSONList, currentGeoJSON]);
+  }, [data, currentGeoJSON]);
 
   return (
     <div className="d-flex vh-100">
@@ -160,17 +169,21 @@ function App() {
         </Form>
         <hr />
         <h5>List of DB GeoJSON</h5>
-        {sendData.geojson && (
-        <Form.Check
-          id="radio"
-          type="radio"
-          name="radio"
-          label="Current input GeoJSON"
-          checked={currentGeoJSON === sendData.geojson}
-          onChange={() => setCurrentGeoJSON(sendData.geojson)}
-        />
+        {isLoading ? <Spinner size="sm" /> : (
+          <div>
+            {sendData.geojson && (
+              <Form.Check
+                id="radio"
+                type="radio"
+                name="radio"
+                label="Current input GeoJSON"
+                checked={currentGeoJSON === sendData.geojson}
+                onChange={() => setCurrentGeoJSON(sendData.geojson)}
+              />
+            )}
+            {listMemo}
+          </div>
         )}
-        {listMemo}
       </div>
     </div>
   );

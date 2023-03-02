@@ -54,9 +54,10 @@ const SwalSubmit = ({
               icon: 'success',
               title: 'Success',
               text: res?.message ?? successText,
+              allowOutsideClick: false,
             }).then(() => (onSuccess ? onSuccess(res) : null));
           })
-          .catch((e: any) => SwalError(e.response.data.message ?? e.message ?? 'Something went wrong!'));
+          .catch((e: any) => SwalError(e?.response?.data?.message ?? e?.message ?? 'Something went wrong!'));
       }
     }).catch((e) => SwalError(e))
 );
