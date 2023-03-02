@@ -40,9 +40,10 @@ function App() {
     if (form.checkValidity() && sendData.geojson) {
       SwalSubmit({
         onSubmit: () => axios.post('/api', sendData, {
-          timeout: 15000,
+          timeout: 30000,
         }),
         onSuccess: () => {
+          setSendData({ name: '', geojson: undefined });
           form.reset();
           refetch();
         },
